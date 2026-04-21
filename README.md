@@ -97,6 +97,28 @@ graph TB
 
 ---
 
+## 🗺️ Visual System Map
+Explore the inner workings of the Digital FTE through these architectural drawings:
+
+*   **[Overall Repo Flow Map](REPOSITORY_MAP.md)** — How all folders connect.
+*   **[Agent Brain Architecture](production/agent/VISUAL.md)** — AI decision & tool loop.
+*   **[Channel Flow](production/channels/VISUAL.md)** — External communication logic.
+*   **[MCP Toolset](src/VISUAL.md)** — Model Context Protocol implementation.
+*   **[Database Schema](production/database/VISUAL.md)** — Data persistence & memory.
+
+---
+
+## 📸 System Snapshots
+Latest operational snapshots (April 21, 2026):
+
+| Dashboard | Ticket Workflow |
+|-----------|-----------------|
+| ![Frontend](localhost3000_snap.JPG) | ![Ticket Created](ticket_created_snap.JPG) |
+
+---
+
+---
+
 ## Key Metrics
 
 | Category | Count |

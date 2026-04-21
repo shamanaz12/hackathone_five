@@ -38,6 +38,12 @@ from production.agent.tools import (
     get_customer_history,
     escalate_to_human,
     send_response,
+    # Raw functions for fallback
+    search_kb_raw,
+    create_ticket_raw,
+    get_history_raw,
+    escalate_raw,
+    send_response_raw,
     SearchKnowledgeBaseInput,
     CreateTicketInput,
     GetCustomerHistoryInput,
@@ -556,14 +562,14 @@ class AgentPipeline:
 
     def _create_ticket(self, customer_name, message, email=None, phone=None, subject=None) -> dict:
         try:
-            raw = create_ticket(CreateTicketInput(
+            raw = create_ticket_raw(
                 customer_name=customer_name,
                 message=message,
                 channel=self.channel,
                 email=email,
                 phone=phone,
                 subject=subject,
-            ))
+            )
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step create_ticket failed: %s", exc)
@@ -571,11 +577,11 @@ class AgentPipeline:
 
     def _get_history(self, email=None, phone=None, customer_id=None) -> dict:
         try:
-            raw = get_customer_history(GetCustomerHistoryInput(
+            raw = get_history_raw(
                 email=email, 
                 phone=phone,
                 customer_id=customer_id
-            ))
+            )
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step get_history failed: %s", exc)
@@ -583,7 +589,7 @@ class AgentPipeline:
 
     def _search_kb(self, query: str, topic: str = None) -> dict:
         try:
-            raw = search_knowledge_base(SearchKnowledgeBaseInput(query=query, topic=topic))
+            raw = search_kb_raw(query=query, topic=topic)
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step search_kb failed: %s", exc)
@@ -713,14 +719,14 @@ class AgentPipeline:
 
     def _send_response(self, ticket_id, response_text, channel, escalation) -> dict:
         try:
-            raw = send_response(SendResponseInput(
+            raw = send_response_raw(
                 ticket_id=ticket_id,
                 response_text=response_text,
                 channel=channel,
                 include_escalation_note=escalation.get("escalate", False),
                 escalation_team=escalation.get("team", "").replace("_", " ").title() if escalation.get("team") else None,
                 escalation_sla=escalation.get("sla") or None,
-            ))
+            )
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step send_response failed: %s", exc)
@@ -728,14 +734,14 @@ class AgentPipeline:
 
     def _escalate(self, ticket_id, team, reason, priority, customer_name) -> dict:
         try:
-            raw = escalate_to_human(EscalateToHumanInput(
+            raw = escalate_raw(
                 ticket_id=ticket_id,
                 team=team,
                 reason=reason,
                 priority=priority,
                 customer_name=customer_name,
                 summary=f"Auto-escalated by agent pipeline: {reason}",
-            ))
+            )
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step escalate failed: %s", exc)

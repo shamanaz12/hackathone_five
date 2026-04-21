@@ -349,6 +349,42 @@ class GmailHandler:
             logger.error("Gmail webhook processing failed: %s", exc, exc_info=True)
             return {"status": "error", "message": str(exc)}
 
+    async def handle_incoming_email(self, pubsub_message: dict) -> dict:
+        """
+        Process a Gmail webhook and run through the AI agent pipeline.
+        """
+        from production.agent.customer_success_agent import AgentPipeline
+        
+        result = self.process_webhook(pubsub_message)
+        if result.get("status") != "processed":
+            return result
+            
+        email_data = result.get("email", {})
+        pipeline = AgentPipeline(channel="email")
+        
+        agent_result = await pipeline.process_inquiry(
+            customer_name=email_data.get("from_name", "Valued Customer"),
+            message=email_data.get("body", ""),
+            email=email_data.get("from_email"),
+            subject=email_data.get("subject"),
+        )
+        
+        ai_response = agent_result.get("response", "Thank you for your inquiry.")
+        
+        # Send reply
+        self.send_reply(
+            to_email=email_data.get("from_email"),
+            subject=f"Re: {email_data.get('subject', 'Support Inquiry')}",
+            body=ai_response,
+            thread_id=email_data.get("gmail_thread_id"),
+            in_reply_to=email_data.get("message_id")
+        )
+        
+        result["ticket_id"] = agent_result.get("ticket_id")
+        result["ai_response"] = ai_response
+        result["status"] = "completed"
+        return result
+
     def _fetch_latest_message(self) -> Optional[dict]:
         """Fetch the latest unread message from the support inbox."""
         try:
