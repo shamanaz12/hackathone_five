@@ -1,0 +1,6 @@
+import google.generativeai as genai
+
+genai.configure(api_key="AIzaSyA02WmttEv1XJWymKtzaQTN7oJtTnRHEF8")
+model = genai.GenerativeModel('gemini-2.0-flash')
+response = model.generate_content("Assalam-o-Alaikum!")
+print(response.text)

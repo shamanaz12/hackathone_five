@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskFlow WhatsApp Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #e5ddd5;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            width: 400px;
+            height: 600px;
+            background: #fff;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        header {
+            background-color: #075e54;
+            color: white;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .avatar {
+            width: 40px;
+            height: 40px;
+            background: #ccc;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+        .chat-window {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+        }
+        .message {
+            max-width: 80%;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+            position: relative;
+        }
+        .sent {
+            align-self: flex-end;
+            background-color: #dcf8c6;
+        }
+        .received {
+            align-self: flex-start;
+            background-color: #fff;
+        }
+        .time {
+            font-size: 10px;
+            color: #888;
+            margin-top: 5px;
+            text-align: right;
+        }
+        footer {
+            padding: 10px;
+            background: #f0f0f0;
+            display: flex;
+            gap: 10px;
+        }
+        input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 20px;
+            outline: none;
+        }
+        button {
+            background: #075e54;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #ccc;
+        }
+        .typing {
+            font-style: italic;
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="avatar">TF</div>
+        <div>
+            <div style="font-weight: bold;">TaskFlow Support AI</div>
+            <div style="font-size: 12px;">Online</div>
+        </div>
+    </header>
+
+    <div class="chat-window" id="chat">
+        <div class="message received">
+            Welcome to TaskFlow! How can I help you today?
+            <div class="time">Just now</div>
+        </div>
+    </div>
+
+    <div id="typing" class="typing" style="padding: 0 20px;">AI is typing...</div>
+
+    <footer>
+        <input type="text" id="userInput" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendMessage()">
+        <button id="sendBtn" onclick="sendMessage()">Send</button>
+    </footer>
+</div>
+
+<script>
+    const chat = document.getElementById('chat');
+    const userInput = document.getElementById('userInput');
+    const typing = document.getElementById('typing');
+    const sendBtn = document.getElementById('sendBtn');
+    const userPhone = "03161129505";
+
+    async function sendMessage() {
+        const text = userInput.value.trim();
+        if (!text) return;
+
+        // Add user message to UI
+        addMessage(text, 'sent');
+        userInput.value = '';
+        
+        // Show typing indicator
+        typing.style.display = 'block';
+        sendBtn.disabled = true;
+        chat.scrollTop = chat.scrollHeight;
+
+        try {
+            // Simulate WhatsApp Webhook
+            const payload = {
+                "object": "whatsapp_business_account",
+                "entry": [{
+                    "changes": [{
+                        "value": {
+                            "messages": [{
+                                "from": userPhone,
+                                "text": { "body": text }
+                            }],
+                            "contacts": [{ "profile": { "name": "User" } }]
+                        }
+                    }]
+                }]
+            };
+
+            const response = await fetch('/webhooks/whatsapp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            
+            // Hide typing indicator
+            typing.style.display = 'none';
+            sendBtn.disabled = false;
+
+            if (data.results && data.results[0]) {
+                addMessage(data.results[0].ai_response, 'received');
+            } else {
+                addMessage("Sorry, I encountered an error. Please try again.", 'received');
+            }
+        } catch (error) {
+            typing.style.display = 'none';
+            sendBtn.disabled = false;
+            addMessage("Connection error. Is the server running?", 'received');
+        }
+    }
+
+    function addMessage(text, type) {
+        const div = document.createElement('div');
+        div.className = `message ${type}`;
+        
+        const now = new Date();
+        const timeStr = now.getHours() + ":" + now.getMinutes().toString().padStart(2, '0');
+        
+        div.innerHTML = `
+            ${text.replace(/\n/g, '<br>')}
+            <div class="time">${timeStr}</div>
+        `;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+    }
+</script>
+
+</body>
+</html>

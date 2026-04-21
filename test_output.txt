@@ -1,0 +1,29 @@
+=== TOOLS MODULE LOADED ===
+  search_knowledge_base: exists=True, is_agent_tool=True
+  create_ticket: exists=True, is_agent_tool=True
+  get_customer_history: exists=True, is_agent_tool=True
+  escalate_to_human: exists=True, is_agent_tool=True
+  send_response: exists=True, is_agent_tool=True
+
+=== VALIDATION TESTS ===
+  PASS: topic val
+  PASS: channel val
+  PASS: team val
+  PASS: priority val
+  PASS: email val
+  PASS: has_identifier False
+  PASS: has_identifier True
+  PASS: valid search
+
+=== FUNCTIONAL TESTS ===
+  PASS: search found
+  PASS: create ticket
+  PASS: history no id
+  PASS: history auto-create
+  PASS: escalate
+  PASS: escalate bad ticket
+  PASS: send response
+  PASS: send bad ticket
+  PASS: send with esc note
+
+=== RESULTS: 17 passed, 0 failed ===

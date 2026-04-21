@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskflow-config
+  namespace: taskflow
+  labels:
+    app.kubernetes.io/name: taskflow
+    app.kubernetes.io/component: config
+data:
+  # ── Application ──
+  APP_NAME: "TaskFlow AI Support Agent"
+  ENVIRONMENT: "production"
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+
+  # ── Database ──
+  DB_HOST: "taskflow-postgres"
+  DB_PORT: "5432"
+  DB_NAME: "taskflow_support"
+  DB_USER: "taskflow"
+
+  # ── Kafka ──
+  KAFKA_BOOTSTRAP_SERVERS: "taskflow-kafka:9092"
+
+  # ── CORS ──
+  CORS_ORIGINS: '["https://app.techcorp.com", "https://support.techcorp.com"]'
+
+  # ── WhatsApp ──
+  WHATSAPP_VERIFY_TOKEN: "techcorp-whatsapp-verify-2026"
+  WHATSAPP_API_VERSION: "v18.0"
+
+  # ── OpenAI Agent ──
+  OPENAI_MODEL: "gpt-4o-mini"
+  AGENT_TEMPERATURE: "0.3"
+  AGENT_MAX_TOKENS: "2000"
+
+  # ── Rate Limiting ──
+  RATE_LIMIT_PER_MINUTE: "60"
+  RATE_LIMIT_BURST: "10"
+
+  # ── Feature Flags ──
+  ENABLE_EMAIL_CHANNEL: "true"
+  ENABLE_WHATSAPP_CHANNEL: "true"
+  ENABLE_WEB_FORM: "true"
+  ENABLE_AGENT_AUTO_RESOLVE: "true"

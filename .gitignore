@@ -1,0 +1,41 @@
+# Secrets and Env
+.env
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!next.config.js
+!project.json
+
+# Credentials
+client_secret_*.json
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# Node modules
+node_modules/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+.next/
+dist/
+build/
+out/
+
+# OS files
+.DS_Store
+Thumbs.db

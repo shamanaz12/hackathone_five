@@ -1,0 +1,67 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: taskflow-ingress
+  namespace: taskflow
+  labels:
+    app.kubernetes.io/name: taskflow
+    app.kubernetes.io/component: ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/rate-limit: "60"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+    - hosts:
+        - api.techcorp.com
+        - support.techcorp.com
+      secretName: taskflow-tls
+  rules:
+    - host: api.techcorp.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: taskflow-api
+                port:
+                  number: 80
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: taskflow-api
+                port:
+                  number: 80
+    - host: support.techcorp.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: taskflow-api
+                port:
+                  number: 80
+    # Webhook endpoints (for Gmail/WhatsApp)
+    - host: webhooks.techcorp.com
+      http:
+        paths:
+          - path: /webhooks/gmail
+            pathType: Prefix
+            backend:
+              service:
+                name: taskflow-webhooks
+                port:
+                  number: 8080
+          - path: /webhooks/whatsapp
+            pathType: Prefix
+            backend:
+              service:
+                name: taskflow-webhooks
+                port:
+                  number: 8080
