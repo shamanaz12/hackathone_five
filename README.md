@@ -109,11 +109,22 @@ Explore the inner workings of the Digital FTE through these architectural drawin
 ---
 
 ## 📸 System Snapshots
-Latest operational snapshots (April 21, 2026):
+Latest operational snapshots showing the system in action:
 
-| Dashboard | Ticket Workflow |
-|-----------|-----------------|
+| **Frontend Dashboard** | **AI Ticket Creation** |
+|:---:|:---:|
 | ![Frontend](localhost3000_snap.JPG) | ![Ticket Created](ticket_created_snap.JPG) |
+| **System Health Check** | **API Documentation** |
+| ![Health](snap_health_ready.JPG) | ![API Docs](Capture.JPsnap_api_docs.JPG) |
+
+---
+
+## 🦾 Digital FTE Capabilities
+Unlike a standard chatbot, TaskFlow AI operates as a full-time digital employee:
+- **Autonomous Decision Making:** Decides which tools to use based on the customer's problem.
+- **Cross-Channel Memory:** Remembers a customer's WhatsApp conversation when they follow up via Email.
+- **Intelligent Routing:** Automatically escalates high-frustration billing issues to the Finance team.
+- **Self-Correcting:** Uses rule-based fallbacks if AI models are temporarily unavailable.
 
 ---
 
