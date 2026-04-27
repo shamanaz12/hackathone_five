@@ -97,14 +97,17 @@ graph TB
 
 ---
 
-## 🗺️ Visual System Map
-Explore the inner workings of the Digital FTE through these architectural drawings:
+## 🗺️ Visual System Map (Full Architectural Flow)
+**[Click here to view the Professional System Map & Repository Flow](REPOSITORY_MAP.md)**
 
-*   **[Overall Repo Flow Map](REPOSITORY_MAP.md)** — How all folders connect.
-*   **[Agent Brain Architecture](production/agent/VISUAL.md)** — AI decision & tool loop.
-*   **[Channel Flow](production/channels/VISUAL.md)** — External communication logic.
-*   **[MCP Toolset](src/VISUAL.md)** — Model Context Protocol implementation.
-*   **[Database Schema](production/database/VISUAL.md)** — Data persistence & memory.
+Explore the inner workings of the Digital FTE through this high-fidelity architectural drawing:
+![Architecture Preview](https://img.shields.io/badge/Architecture-High%20Fidelity-blue?style=for-the-badge&logo=mermaid)
+
+*   **Overall Repo Flow Map** — How all folders connect ([View Full Diagram](REPOSITORY_MAP.md)).
+*   **Agent Brain Architecture** — AI decision & tool loop ([Detailed Agent Docs](production/agent/VISUAL.md)).
+*   **Channel Flow** — External communication logic ([Channel Docs](production/channels/VISUAL.md)).
+*   **MCP Toolset** — Model Context Protocol implementation ([MCP Docs](src/VISUAL.md)).
+*   **Database Schema** — Data persistence & memory ([Database Docs](production/database/VISUAL.md)).
 
 ---
 
