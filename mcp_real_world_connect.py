@@ -9,11 +9,15 @@ async def run_mcp_client_demo():
     print("TASKFLOW REAL-WORLD MCP CONNECTION")
     print("="*60)
 
+    import os
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.getcwd()
+
     # Configure the server parameters (connecting via stdio to the server script)
     server_params = StdioServerParameters(
         command="python",
         args=["src/mcp_server.py"],
-        env=None
+        env=env
     )
 
     print("\n[1] Connecting to MCP Server via stdio...")

@@ -135,7 +135,7 @@ Already configured with defaults in `E:\hack_2026_05\.env`:
 |----------|---------------|-------|
 | `DATABASE_URL` | `postgresql+asyncpg://taskflow:taskflow@localhost:5432/taskflow_support` | Ready for PostgreSQL |
 | `OPENAI_API_KEY` | `sk-your-openai-api-key-here` | **Replace with real key for LLM mode** |
-| `SUPPORT_EMAIL` | `shama20302022@gmail.com` | ✅ Set |
+| `SUPPORT_EMAIL` | `shamasadaf00786@gmail.com` | ✅ Set |
 | `ENVIRONMENT` | `development` | ✅ Set |
 
 ### Enable OpenAI LLM Mode
@@ -391,7 +391,7 @@ python test_runner.py
 
 - **API Docs:** http://localhost:8000/api/docs
 - **Health:** http://localhost:8000/health
-- **Support Email:** shama20302022@gmail.com
+- **Support Email:** shamasadaf00786@gmail.com
 - **Project Root:** E:\hack_2026_05
 
 ---

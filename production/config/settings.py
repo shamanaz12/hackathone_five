@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # ── Database ──
-    database_url: str = "postgresql://postgres:balaj786@localhost:5432/taskflow"
-    database_async_url: str = "postgresql+asyncpg://postgres:balaj786@localhost:5432/taskflow"
+    database_url: str = "sqlite:///taskflow.db"
+    database_async_url: str = "sqlite+aiosqlite:///taskflow.db"
     postgres_user: str = "postgres"
     postgres_password: str = "balaj786"
     postgres_db: str = "taskflow"
@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     cohere_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "openai/gpt-4o-mini"
     agent_temperature: float = 0.3
     agent_max_tokens: int = 2000
 

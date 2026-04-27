@@ -57,6 +57,12 @@ try:
         get_customer_history,
         escalate_to_human,
         send_response,
+        # Raw versions for direct calling
+        search_kb_raw,
+        create_ticket_raw,
+        get_history_raw,
+        escalate_raw,
+        send_response_raw,
         SearchKnowledgeBaseInput,
         CreateTicketInput,
         GetCustomerHistoryInput,
@@ -69,6 +75,15 @@ except Exception as exc:
     print(f"[ERR] Failed to load agent tools: {exc}")
     print("    Make sure 'openai-agents' is installed OR the fallback decorator is working.")
     sys.exit(1)
+
+# Map tool names to their raw functions for testing
+TOOL_MAP = {
+    "search_knowledge_base": search_kb_raw,
+    "create_ticket": create_ticket_raw,
+    "get_customer_history": get_history_raw,
+    "escalate_to_human": escalate_raw,
+    "send_response": send_response_raw,
+}
 
 # ── Test helpers ──
 passed = 0
@@ -89,7 +104,19 @@ def run_tool(name: str, tool_fn, input_model, expected_status: str = "found"):
     """Run a tool and check its status field."""
     global passed, failed
     try:
-        result_str = tool_fn(input_model)
+        # If it's a FunctionTool, use the raw function with dict arguments
+        if hasattr(tool_fn, "_is_agent_tool") or type(tool_fn).__name__ == "FunctionTool":
+            # Get name from FunctionTool object
+            fn_name = getattr(tool_fn, "name", None)
+            raw_fn = TOOL_MAP.get(fn_name)
+            if raw_fn:
+                result_str = raw_fn(**input_model.model_dump())
+            else:
+                # Fallback: try calling it directly if it's just a function
+                result_str = tool_fn(input_model)
+        else:
+            result_str = tool_fn(input_model)
+            
         result = json.loads(result_str)
         status = result.get("status", "")
         if status == expected_status or (expected_status == "found" and status in ("found", "created", "sent", "escalated")):
@@ -393,8 +420,8 @@ print(f"    Message: {customer_message}")
 
 # Step 2: AI searches knowledge base
 print("  Step 2: AI searches knowledge base")
-kb_result = json.loads(search_knowledge_base(
-    SearchKnowledgeBaseInput(query=customer_message, topic="password_reset")
+kb_result = json.loads(search_kb_raw(
+    query=customer_message, topic="password_reset"
 ))
 test("KB search found relevant content", kb_result.get("status") == "found")
 if kb_result.get("status") == "found":
@@ -402,14 +429,12 @@ if kb_result.get("status") == "found":
 
 # Step 3: AI creates ticket
 print("  Step 3: AI creates ticket")
-ticket_result = json.loads(create_ticket(
-    CreateTicketInput(
-        customer_name="Sarah Wilson",
-        message=customer_message,
-        channel="email",
-        email="sarah@example.com",
-        subject="Password Reset Issue",
-    )
+ticket_result = json.loads(create_ticket_raw(
+    customer_name="Sarah Wilson",
+    message=customer_message,
+    channel="email",
+    email="sarah@example.com",
+    subject="Password Reset Issue",
 ))
 test("Ticket created", ticket_result.get("status") == "created")
 if ticket_result.get("status") == "created":
@@ -418,28 +443,26 @@ if ticket_result.get("status") == "created":
 
 # Step 4: AI generates response
 print("  Step 4: AI sends response")
-response_result = json.loads(send_response(
-    SendResponseInput(
-        ticket_id=ticket_id,
-        response_text=(
-            "Hi Sarah, I understand you're having trouble with password reset. "
-            "Here's what you can do:\n\n"
-            "1. Go to the login page and click 'Forgot Password?'\n"
-            "2. Enter your email address\n"
-            "3. Check your inbox (and spam folder) for the reset link\n"
-            "4. The link expires after 1 hour\n\n"
-            "If you still don't receive it, I can manually trigger a reset for you."
-        ),
-        channel="email",
-        agent_name="TaskFlow AI Agent",
-    )
+response_result = json.loads(send_response_raw(
+    ticket_id=ticket_id,
+    response_text=(
+        "Hi Sarah, I understand you're having trouble with password reset. "
+        "Here's what you can do:\n\n"
+        "1. Go to the login page and click 'Forgot Password?'\n"
+        "2. Enter your email address\n"
+        "3. Check your inbox (and spam folder) for the reset link\n"
+        "4. The link expires after 1 hour\n\n"
+        "If you still don't receive it, I can manually trigger a reset for you."
+    ),
+    channel="email",
+    agent_name="TaskFlow AI Agent",
 ))
 test("Response sent", response_result.get("status") == "sent")
 
 # Step 5: Check customer history
 print("  Step 5: Verify customer history")
-history_result = json.loads(get_customer_history(
-    GetCustomerHistoryInput(email="sarah@example.com")
+history_result = json.loads(get_history_raw(
+    email="sarah@example.com"
 ))
 test("Customer history retrieved", history_result.get("status") == "found")
 if history_result.get("status") == "found":

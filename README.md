@@ -38,12 +38,12 @@
 ## Key Features
 
 - **Multi-Model Intelligence** — Powered by GPT-4o-mini and Google Gemini 1.5 Pro via OpenRouter.
-- **5 AI Agent Tools (MCP)** — Knowledge base search, ticket creation, customer history lookup, escalation, and response delivery.
+- **5 AI Agent Tools (MCP)** — Knowledge base search, ticket creation, customer history lookup, escalation, and response delivery. All tools sync directly with the SQLite "Real Base".
 - **Real Multi-Channel Handlers** — Production-ready code for Gmail API and WhatsApp Cloud API.
 - **Intelligent Escalation** — Sentiment-aware P1-P4 matrix with automated handoff to human teams.
 - **Sentiment Analysis** — Rule-based scoring (-2 to +2) with emotion indicators (urgency, frustration, positivity)
 - **Kafka-Powered Pipeline** — 10 topics, exponential backoff retry, dead letter queue, metrics collection
-- **Production-Ready** — PostgreSQL with 10 tables, 30+ indexes, 5 triggers, 3 views; Kubernetes with HPA, PDB, NetworkPolicy
+- **Production-Ready** — SQLite for local portability (PostgreSQL ready), 10 tables, 30+ indexes, 5 triggers, 3 views; Kubernetes with HPA, PDB, NetworkPolicy
 
 ---
 
@@ -58,7 +58,7 @@ graph TB
     end
 
     subgraph "FastAPI Server"
-        GW --> LP[Lifespan: DB Pool + Kafka Producer]
+        GW --> LP[Lifespan: DB Sync + Kafka Producer]
         WW --> LP
         WT --> LP
         LP --> AP[AgentPipeline]
@@ -83,7 +83,7 @@ graph TB
         MP --> DLQ[taskflow.errors.dead_letter]
     end
 
-    subgraph "PostgreSQL"
+    subgraph "SQLite (Local Real-Base)"
         CT --> DB[(customers, tickets, conversations, messages, escalations, knowledge_base)]
     end
 

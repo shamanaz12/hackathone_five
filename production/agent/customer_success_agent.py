@@ -454,12 +454,53 @@ class AgentPipeline:
             return result
         ticket_id = ticket_result["ticket"]["ticket_id"]
         result["ticket_id"] = ticket_id
+        
+        # 1. Search Knowledge Base
         kb_result = self._search_kb(query=message)
         result["steps"]["knowledge_base"] = kb_result
+        
+        # 2. Analyze Sentiment
         sentiment_result = self._analyze_sentiment(message)
         result["steps"]["sentiment"] = sentiment_result
-        # Simulating basic logic
-        response_text = f"Hi {customer_name}, I've received your ticket {ticket_id}. Our team will help you."
+        
+        # 3. Generate Smart Rule-based Response
+        kb_data = kb_result.get("results", [])
+        if kb_data:
+            # Smart fallback: use KB content
+            kb_main = kb_data[0]
+            answer = kb_main.get("content", "I found some relevant information for you.")
+            details = kb_main.get("details", {})
+            
+            response_text = f"Hi {customer_name}, I've found some information regarding your inquiry about '{kb_main.get('title')}':\n\n"
+            
+            # Extract content if it's a dict
+            if isinstance(answer, dict):
+                overview = answer.get("overview", "")
+                if overview:
+                    response_text += f"{overview}\n\n"
+                steps = answer.get("steps", [])
+                if steps:
+                    response_text += "Steps:\n" + "\n".join(f"- {s}" for s in steps) + "\n"
+            else:
+                response_text += f"{answer}\n\n"
+
+            if details:
+                if isinstance(details, dict):
+                    for k, v in details.items():
+                        response_text += f"- {k.replace('_', ' ').title()}: {v}\n"
+                elif isinstance(details, list):
+                    for item in details:
+                        response_text += f"- {item}\n"
+            
+            response_text += f"\nI've also created a ticket ({ticket_id}) if you need more help!"
+        else:
+            # Generic fallback
+            response_text = f"Hi {customer_name}, I've received your ticket {ticket_id}. I couldn't find a direct answer in my database, but our team will help you soon."
+            
+        # Add a small note about AI mode if key is missing
+        if not self.settings.openai_api_key or "sk-" in self.settings.openai_api_key:
+             response_text += "\n\n(Note: I'm currently running in 'Smart Rule' mode. Add an OpenAI API Key to .env to enable my full AI Brain!)"
+
         send_result = self._send_response(ticket_id, response_text, self.channel, {"escalate": False})
         result["response"] = response_text
         result["status"] = "completed"
