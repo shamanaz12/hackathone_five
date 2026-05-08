@@ -15,7 +15,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from production.config.settings import get_settings
@@ -25,11 +25,15 @@ from production.channels.gmail_handler import GmailHandler
 from production.channels.whatsapp_handler import WhatsAppHandler
 from production.database.session import get_session_factory, init_db, close_db
 from production.kafka_client import KafkaProducer
+from pathlib import Path
 
 # Setup
 setup_logging()
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Resolve project root
+_project_root = Path(__file__).resolve().parent.parent.parent
 
 # Global state
 _kafka_producer = None
@@ -118,6 +122,11 @@ async def log_requests(request: Request, call_next):
     return response
 
 
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/api/docs")
+
+
 # Health checks
 @app.get("/health", tags=["System"])
 async def health_check():
@@ -156,7 +165,8 @@ async def health_check():
 @app.get("/demo/whatsapp", tags=["Demo"])
 async def whatsapp_demo():
     try:
-        with open("whatsapp_demo.html", "r", encoding="utf-8") as f:
+        demo_file = _project_root / "whatsapp_demo.html"
+        with open(demo_file, "r", encoding="utf-8") as f:
             content = f.read()
         return HTMLResponse(content=content)
     except Exception as e:
@@ -167,7 +177,8 @@ async def whatsapp_demo():
 @app.get("/demo/webform", tags=["Demo"])
 async def webform_demo():
     try:
-        with open("web_form_demo.html", "r", encoding="utf-8") as f:
+        demo_file = _project_root / "web_form_demo.html"
+        with open(demo_file, "r", encoding="utf-8") as f:
             content = f.read()
         return HTMLResponse(content=content)
     except Exception as e:

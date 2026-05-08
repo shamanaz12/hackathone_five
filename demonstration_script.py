@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("Demonstration")
 
 from production.agent.customer_success_agent import AgentPipeline
-from src.mcp_server import _ticket_store, _customer_store
+from production.agent.tools import _ticket_store, _customer_store
 
 async def demonstrate_gmail_integration():
     print("\n" + "="*60)

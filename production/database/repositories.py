@@ -377,17 +377,40 @@ class KnowledgeBaseRepository:
 
     def search(self, query: str, limit: int = 5) -> list[KnowledgeBase]:
         """Simple keyword search against KB articles."""
-        stmt = (
-            select(KnowledgeBase)
-            .where(
-                KnowledgeBase.is_active == True,  # noqa: E712
-                or_(
-                    KnowledgeBase.title.ilike(f"%{query}%"),
-                    KnowledgeBase.overview.ilike(f"%{query}%"),
-                ),
+        # Clean and split query into keywords
+        keywords = [k.strip().lower() for k in query.replace(",", " ").split() if len(k.strip()) > 2]
+        
+        if not keywords:
+            # Fallback to ilike if no good keywords
+            stmt = (
+                select(KnowledgeBase)
+                .where(
+                    KnowledgeBase.is_active == True,  # noqa: E712
+                    or_(
+                        KnowledgeBase.title.ilike(f"%{query}%"),
+                        KnowledgeBase.overview.ilike(f"%{query}%"),
+                    ),
+                )
+                .limit(limit)
             )
-            .limit(limit)
-        )
+        else:
+            # Match ANY keyword in title, overview, or keywords list
+            conditions = []
+            for kw in keywords:
+                conditions.append(KnowledgeBase.title.ilike(f"%{kw}%"))
+                conditions.append(KnowledgeBase.overview.ilike(f"%{kw}%"))
+                # Note: KnowledgeBase.keywords is likely a JSON or string field, checking it requires different logic
+                # depending on how it's stored. Assuming it's a list/string for now.
+            
+            stmt = (
+                select(KnowledgeBase)
+                .where(
+                    KnowledgeBase.is_active == True,  # noqa: E712
+                    or_(*conditions)
+                )
+                .limit(limit)
+            )
+            
         result = self._session.execute(stmt)
         return list(result.scalars().all())
 

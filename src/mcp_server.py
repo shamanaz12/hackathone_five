@@ -129,7 +129,14 @@ def search_knowledge_base(
         
         if topic:
             kb = repo.find_by_topic(topic)
-            results = [kb] if kb else []
+            # If topic provided, verify query relevance (simple keyword check)
+            if kb:
+                query_lower = query.lower()
+                matches = any(kw.lower() in query_lower for kw in (kb.keywords or []))
+                matches = matches or any(kw.lower() in kb.title.lower() for kw in query_lower.split())
+                results = [kb] if matches else []
+            else:
+                results = []
         else:
             results = repo.search(query)
 
@@ -214,6 +221,9 @@ def get_customer_history(
     customer_id: Optional[str] = None,
 ) -> str:
     """Retrieve the full conversation history and profile for a customer."""
+    if not any([email, phone, customer_id]):
+        return json.dumps({"status": "error", "message": "At least one identifier (email, phone, or customer_id) must be provided"}, indent=2)
+
     session_factory = get_session_factory()
     with session_factory() as session:
         cust_repo = CustomerRepository(session)

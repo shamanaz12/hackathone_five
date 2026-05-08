@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List
 
 from dotenv import load_dotenv
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve .env file path relative to project root
@@ -40,8 +41,18 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # ── Database ──
-    database_url: str = "sqlite:///taskflow.db"
-    database_async_url: str = "sqlite+aiosqlite:///taskflow.db"
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///taskflow.db")
+    database_async_url: str = os.getenv("DATABASE_ASYNC_URL", "sqlite+aiosqlite:///taskflow.db")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Fix for Render/Heroku postgres:// vs postgresql://
+        if self.database_url.startswith("postgres://"):
+            self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
+        
+        # If database_url is postgres, update async_url to use aiosqlite if sqlite or asyncpg if postgres
+        if "postgresql" in self.database_url:
+            self.database_async_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
     postgres_user: str = "postgres"
     postgres_password: str = "balaj786"
     postgres_db: str = "taskflow"
@@ -49,7 +60,17 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
 
     # ── CORS ──
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173", "https://app.techcorp.com"]
+    cors_origins: List[str] = Field(
+        default=["http://localhost:3000", "http://localhost:5173", "https://app.techcorp.com"],
+        validation_alias="CORS_ORIGINS"
+    )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
 
     # ── Logging ──
     log_level: str = "INFO"

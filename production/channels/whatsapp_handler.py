@@ -701,6 +701,40 @@ class WhatsAppHandler:
             logger.error("Media download failed: %s", exc, exc_info=True)
             return None
 
+    async def process_meta_webhook(self, payload: dict) -> dict:
+        """Meta/WhatsApp Cloud API webhook process karne ke liye (HTML file ke liye)"""
+        
+        try:
+            # HTML file se aaya hua message nikalo
+            entry = payload.get('entry', [{}])[0]
+            changes = entry.get('changes', [{}])[0]
+            value = changes.get('value', {})
+            messages = value.get('messages', [])
+            
+            if not messages:
+                return {"results": []}
+            
+            message = messages[0]
+            user_phone = message.get('from')
+            user_text = message.get('text', {}).get('body', '')
+            
+            # Pehli file (whatsapp_flows.py) se jawab lo
+            from agent.whatsapp_flows import WhatsAppFlows
+            
+            reply_text, should_escalate = WhatsAppFlows.get_response(user_text)
+            formatted_reply = WhatsAppFlows.format_whatsapp_reply(reply_text)
+            
+            return {
+                "results": [{
+                    "ai_response": formatted_reply,
+                    "escalated": should_escalate,
+                    "user_message": user_text
+                }]
+            }
+            
+        except Exception as e:
+            return {"results": [{"ai_response": f"Error: {str(e)}", "escalated": False}]}
+
     # ── Cleanup ──
 
     async def close(self):

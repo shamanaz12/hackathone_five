@@ -11,7 +11,8 @@ client = OpenAI(
 
 while True:
     msg = input("You: ")
-    if msg == "exit": break
+    if msg == "exit":
+        break
     res = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": msg}],

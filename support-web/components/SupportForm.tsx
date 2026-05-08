@@ -44,7 +44,8 @@ export default function SupportForm() {
     setSuccess(null);
 
     try {
-      const res = await fetch("http://localhost:8000/api/tickets", {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${apiUrl}/api/tickets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
