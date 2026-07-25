@@ -90,6 +90,13 @@ class WhatsAppHandler:
         """Get or create async HTTP client."""
         if self.http_client and not self.http_client.is_closed:
             return self.http_client
+            
+        if not self.access_token:
+            logger.warning("WhatsApp access token not set — API calls will fail")
+            # Return a client without auth header or handle it differently
+            self.http_client = httpx.AsyncClient(timeout=30.0)
+            return self.http_client
+
         self.http_client = httpx.AsyncClient(
             timeout=30.0,
             headers={
@@ -201,6 +208,42 @@ class WhatsAppHandler:
         except Exception as exc:
             logger.error("WhatsApp webhook processing failed: %s", exc, exc_info=True)
             return [{"status": "error", "message": str(exc)}]
+
+    async def handle_incoming_messages(self, payload: dict) -> list[dict]:
+        """
+        Process a WhatsApp webhook and run each message through the AI agent pipeline.
+        """
+        from production.agent.customer_success_agent import AgentPipeline
+        
+        messages = self.process_webhook(payload)
+        pipeline = AgentPipeline(channel="whatsapp")
+        
+        results = []
+        for msg in messages:
+            if msg.get("status") == "error":
+                results.append(msg)
+                continue
+                
+            agent_result = await pipeline.process_inquiry(
+                customer_name=msg.get("sender_name", "Valued Customer"),
+                message=msg.get("content", ""),
+                phone=msg.get("sender_phone"),
+            )
+            
+            ai_response = agent_result.get("response", "Thank you for your message.")
+            
+            # Send reply
+            await self.send_text_reply(
+                recipient_phone=msg.get("sender_phone"),
+                text=ai_response
+            )
+            
+            msg["ticket_id"] = agent_result.get("ticket_id")
+            msg["ai_response"] = ai_response
+            msg["status"] = "completed"
+            results.append(msg)
+            
+        return results
 
     @staticmethod
     def _extract_message_content(msg: dict, msg_type: str) -> str:
@@ -657,6 +700,40 @@ class WhatsAppHandler:
         except Exception as exc:
             logger.error("Media download failed: %s", exc, exc_info=True)
             return None
+
+    async def process_meta_webhook(self, payload: dict) -> dict:
+        """Meta/WhatsApp Cloud API webhook process karne ke liye (HTML file ke liye)"""
+        
+        try:
+            # HTML file se aaya hua message nikalo
+            entry = payload.get('entry', [{}])[0]
+            changes = entry.get('changes', [{}])[0]
+            value = changes.get('value', {})
+            messages = value.get('messages', [])
+            
+            if not messages:
+                return {"results": []}
+            
+            message = messages[0]
+            user_phone = message.get('from')
+            user_text = message.get('text', {}).get('body', '')
+            
+            # Pehli file (whatsapp_flows.py) se jawab lo
+            from agent.whatsapp_flows import WhatsAppFlows
+            
+            reply_text, should_escalate = WhatsAppFlows.get_response(user_text)
+            formatted_reply = WhatsAppFlows.format_whatsapp_reply(reply_text)
+            
+            return {
+                "results": [{
+                    "ai_response": formatted_reply,
+                    "escalated": should_escalate,
+                    "user_message": user_text
+                }]
+            }
+            
+        except Exception as e:
+            return {"results": [{"ai_response": f"Error: {str(e)}", "escalated": False}]}
 
     # ── Cleanup ──
 

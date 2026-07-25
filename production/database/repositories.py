@@ -13,9 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy import select, func, and_, or_, desc
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
+from sqlalchemy.orm import Session
 from production.database.models import (
     Base,
     Customer,
@@ -36,25 +34,25 @@ logger = logging.getLogger(__name__)
 class CustomerRepository:
     """CRUD + identity resolution for customers."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: Session):
         self._session = session
 
-    async def find_by_email(self, email: str) -> Optional[Customer]:
+    def find_by_email(self, email: str) -> Optional[Customer]:
         stmt = select(Customer).where(func.lower(Customer.email) == email.lower())
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def find_by_phone(self, phone: str) -> Optional[Customer]:
+    def find_by_phone(self, phone: str) -> Optional[Customer]:
         stmt = select(Customer).where(Customer.phone == phone)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def find_by_id(self, customer_id: str) -> Optional[Customer]:
+    def find_by_id(self, customer_id: str) -> Optional[Customer]:
         stmt = select(Customer).where(Customer.customer_id == customer_id)
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def resolve_or_create(
+    def resolve_or_create(
         self,
         name: str,
         email: Optional[str] = None,
@@ -63,16 +61,21 @@ class CustomerRepository:
     ) -> Customer:
         """Find existing customer by email/phone or create a new one."""
         if email:
-            existing = await self.find_by_email(email)
+            existing = self.find_by_email(email)
             if existing:
                 return existing
         if phone:
-            existing = await self.find_by_phone(phone)
+            existing = self.find_by_phone(phone)
             if existing:
                 return existing
 
         now = _utcnow()
+        # Generate custom ID manually for SQLite since we removed server_default sequence
+        import random
+        customer_id = f"CUST-{random.randint(1000, 9999)}"
+        
         customer = Customer(
+            customer_id=customer_id,
             name=name,
             email=email,
             phone=phone,
@@ -92,45 +95,45 @@ class CustomerRepository:
                 setattr(customer, k, v)
 
         self._session.add(customer)
-        await self._session.commit()
-        await self._session.refresh(customer)
+        self._session.commit()
+        self._session.refresh(customer)
         logger.info("Created new customer: %s (%s)", name, customer.customer_id)
         return customer
 
-    async def add_channel(self, customer_id: str, channel: str) -> bool:
-        customer = await self.find_by_id(customer_id)
+    def add_channel(self, customer_id: str, channel: str) -> bool:
+        customer = self.find_by_id(customer_id)
         if not customer:
             return False
         if channel not in customer.channels_seen:
             customer.channels_seen = customer.channels_seen + [channel]
             customer.updated_at = _utcnow()
-            await self._session.commit()
+            self._session.commit()
             return True
         return False
 
-    async def append_sentiment(self, customer_id: str, score: int) -> bool:
-        customer = await self.find_by_id(customer_id)
+    def append_sentiment(self, customer_id: str, score: int) -> bool:
+        customer = self.find_by_id(customer_id)
         if not customer:
             return False
         history = customer.sentiment_history or []
         history.append([_utcnow().isoformat(), score])
         customer.sentiment_history = history
         customer.updated_at = _utcnow()
-        await self._session.commit()
+        self._session.commit()
         return True
 
-    async def increment_ticket_count(self, customer_id: str) -> None:
-        customer = await self.find_by_id(customer_id)
+    def increment_ticket_count(self, customer_id: str) -> None:
+        customer = self.find_by_id(customer_id)
         if customer:
             customer.total_tickets += 1
             customer.last_contact = _utcnow()
-            await self._session.commit()
+            self._session.commit()
 
-    async def increment_escalated_tickets(self, customer_id: str) -> None:
-        customer = await self.find_by_id(customer_id)
+    def increment_escalated_tickets(self, customer_id: str) -> None:
+        customer = self.find_by_id(customer_id)
         if customer:
             customer.escalated_tickets += 1
-            await self._session.commit()
+            self._session.commit()
 
 
 # ============================================================
@@ -140,10 +143,10 @@ class CustomerRepository:
 class TicketRepository:
     """CRUD for tickets."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: Session):
         self._session = session
 
-    async def create(
+    def create(
         self,
         customer_id: str,
         channel: str,
@@ -158,7 +161,11 @@ class TicketRepository:
         previous_channel: Optional[str] = None,
     ) -> Ticket:
         now = _utcnow()
+        import random
+        ticket_id = f"TICKET-{random.randint(1000, 9999)}"
+        
         ticket = Ticket(
+            ticket_id=ticket_id,
             customer_id=customer_id,
             channel=channel,
             subject=subject,
@@ -176,22 +183,21 @@ class TicketRepository:
             updated_at=now,
         )
         self._session.add(ticket)
-        await self._session.commit()
-        await self._session.refresh(ticket)
+        self._session.commit()
+        self._session.refresh(ticket)
         logger.info("Created ticket %s for customer %s", ticket.ticket_id, customer_id)
         return ticket
 
-    async def find_by_id(self, ticket_id: str) -> Optional[Ticket]:
+    def find_by_id(self, ticket_id: str) -> Optional[Ticket]:
         stmt = (
             select(Ticket)
-            .options(selectinload(Ticket.customer), selectinload(Ticket.messages))
             .where(Ticket.ticket_id == ticket_id)
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def update_status(self, ticket_id: str, status: str, ai_attempts: Optional[int] = None) -> bool:
-        ticket = await self.find_by_id(ticket_id)
+    def update_status(self, ticket_id: str, status: str, ai_attempts: Optional[int] = None) -> bool:
+        ticket = self.find_by_id(ticket_id)
         if not ticket:
             return False
         ticket.status = status
@@ -202,16 +208,16 @@ class TicketRepository:
             ticket.resolved_at = _utcnow()
         if status == "closed":
             ticket.closed_at = _utcnow()
-        await self._session.commit()
+        self._session.commit()
         return True
 
-    async def increment_ai_attempts(self, ticket_id: str) -> int:
-        ticket = await self.find_by_id(ticket_id)
+    def increment_ai_attempts(self, ticket_id: str) -> int:
+        ticket = self.find_by_id(ticket_id)
         if not ticket:
             return 0
         ticket.ai_attempts += 1
         ticket.updated_at = _utcnow()
-        await self._session.commit()
+        self._session.commit()
         return ticket.ai_attempts
 
 
@@ -222,10 +228,10 @@ class TicketRepository:
 class ConversationRepository:
     """Manage conversation turns and messages."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: Session):
         self._session = session
 
-    async def create_turn(
+    def create_turn(
         self,
         customer_id: str,
         channel: str,
@@ -239,7 +245,7 @@ class ConversationRepository:
         stmt = select(func.coalesce(func.max(Conversation.turn_number), 0)).where(
             Conversation.customer_id == customer_id
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         next_turn = result.scalar() + 1
 
         turn = Conversation(
@@ -254,18 +260,18 @@ class ConversationRepository:
             created_at=_utcnow(),
         )
         self._session.add(turn)
-        await self._session.commit()
-        await self._session.refresh(turn)
+        self._session.commit()
+        self._session.refresh(turn)
         return turn
 
-    async def get_last_turn(self, customer_id: str) -> Optional[Conversation]:
+    def get_last_turn(self, customer_id: str) -> Optional[Conversation]:
         stmt = (
             select(Conversation)
             .where(Conversation.customer_id == customer_id)
             .order_by(desc(Conversation.turn_number))
             .limit(1)
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
 
@@ -276,10 +282,10 @@ class ConversationRepository:
 class MessageRepository:
     """Record and retrieve messages."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: Session):
         self._session = session
 
-    async def create(
+    def create(
         self,
         conversation_id: str,
         ticket_id: Optional[str],
@@ -302,8 +308,8 @@ class MessageRepository:
             created_at=_utcnow(),
         )
         self._session.add(msg)
-        await self._session.commit()
-        await self._session.refresh(msg)
+        self._session.commit()
+        self._session.refresh(msg)
         return msg
 
 
@@ -314,10 +320,10 @@ class MessageRepository:
 class EscalationRepository:
     """Create and manage escalations."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: Session):
         self._session = session
 
-    async def create(
+    def create(
         self,
         ticket_id: str,
         customer_id: str,
@@ -328,7 +334,11 @@ class EscalationRepository:
         summary: Optional[str] = None,
     ) -> Escalation:
         now = _utcnow()
+        import random
+        escalation_id = f"ESC-{random.randint(1000, 9999)}"
+        
         escalation = Escalation(
+            escalation_id=escalation_id,
             ticket_id=ticket_id,
             customer_id=customer_id,
             team=team,
@@ -341,8 +351,8 @@ class EscalationRepository:
             updated_at=now,
         )
         self._session.add(escalation)
-        await self._session.commit()
-        await self._session.refresh(escalation)
+        self._session.commit()
+        self._session.refresh(escalation)
         logger.info("Created escalation %s for ticket %s → %s", escalation.escalation_id, ticket_id, team)
         return escalation
 
@@ -354,31 +364,54 @@ class EscalationRepository:
 class KnowledgeBaseRepository:
     """Search and retrieve KB articles."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: Session):
         self._session = session
 
-    async def find_by_topic(self, topic: str) -> Optional[KnowledgeBase]:
+    def find_by_topic(self, topic: str) -> Optional[KnowledgeBase]:
         stmt = select(KnowledgeBase).where(
             KnowledgeBase.topic == topic,
             KnowledgeBase.is_active == True,  # noqa: E712
         )
-        result = await self._session.execute(stmt)
+        result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def search(self, query: str, limit: int = 5) -> list[KnowledgeBase]:
+    def search(self, query: str, limit: int = 5) -> list[KnowledgeBase]:
         """Simple keyword search against KB articles."""
-        stmt = (
-            select(KnowledgeBase)
-            .where(
-                KnowledgeBase.is_active == True,  # noqa: E712
-                or_(
-                    KnowledgeBase.title.ilike(f"%{query}%"),
-                    KnowledgeBase.overview.ilike(f"%{query}%"),
-                ),
+        # Clean and split query into keywords
+        keywords = [k.strip().lower() for k in query.replace(",", " ").split() if len(k.strip()) > 2]
+        
+        if not keywords:
+            # Fallback to ilike if no good keywords
+            stmt = (
+                select(KnowledgeBase)
+                .where(
+                    KnowledgeBase.is_active == True,  # noqa: E712
+                    or_(
+                        KnowledgeBase.title.ilike(f"%{query}%"),
+                        KnowledgeBase.overview.ilike(f"%{query}%"),
+                    ),
+                )
+                .limit(limit)
             )
-            .limit(limit)
-        )
-        result = await self._session.execute(stmt)
+        else:
+            # Match ANY keyword in title, overview, or keywords list
+            conditions = []
+            for kw in keywords:
+                conditions.append(KnowledgeBase.title.ilike(f"%{kw}%"))
+                conditions.append(KnowledgeBase.overview.ilike(f"%{kw}%"))
+                # Note: KnowledgeBase.keywords is likely a JSON or string field, checking it requires different logic
+                # depending on how it's stored. Assuming it's a list/string for now.
+            
+            stmt = (
+                select(KnowledgeBase)
+                .where(
+                    KnowledgeBase.is_active == True,  # noqa: E712
+                    or_(*conditions)
+                )
+                .limit(limit)
+            )
+            
+        result = self._session.execute(stmt)
         return list(result.scalars().all())
 
 

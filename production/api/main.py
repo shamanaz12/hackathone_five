@@ -2,12 +2,7 @@
 TaskFlow AI Support Agent — FastAPI Application
 CRM Digital FTE Factory Final Hackathon 5
 
-Production-ready FastAPI application with:
-- Real PostgreSQL database via SQLAlchemy async
-- AI Agent Pipeline with knowledge base search, sentiment, escalation
-- 3 channels: Gmail, WhatsApp, Web Form
-- OpenAI LLM integration (with mock mode fallback)
-- Kafka message bus (optional)
+Modified for SQLite Synchronous compatibility.
 """
 
 from __future__ import annotations
@@ -18,10 +13,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-import asyncpg
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from production.config.settings import get_settings
@@ -31,14 +25,17 @@ from production.channels.gmail_handler import GmailHandler
 from production.channels.whatsapp_handler import WhatsAppHandler
 from production.database.session import get_session_factory, init_db, close_db
 from production.kafka_client import KafkaProducer
+from pathlib import Path
 
 # Setup
 setup_logging()
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Resolve project root
+_project_root = Path(__file__).resolve().parent.parent.parent
+
 # Global state
-_db_pool: asyncpg.Pool | None = None
 _kafka_producer = None
 _gmail_handler: GmailHandler | None = None
 _whatsapp_handler: WhatsAppHandler | None = None
@@ -56,35 +53,18 @@ def _get_pipeline(channel: str = "web_form") -> AgentPipeline:
 # Lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _db_pool, _kafka_producer, _gmail_handler, _whatsapp_handler
+    global _kafka_producer, _gmail_handler, _whatsapp_handler
 
     logger.info("TaskFlow AI Support Agent starting up...")
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"OpenAI API Key: {'***' + settings.openai_api_key[-4:] if settings.openai_api_key and settings.openai_api_key != 'sk-your-openai-api-key-here' else 'NOT SET (mock mode)'}")
 
-    # Initialize SQLAlchemy async engine & session factory
+    # Initialize SQLAlchemy engine & session factory
     try:
-        session_factory = get_session_factory()
-        logger.info("SQLAlchemy session factory created — real DB mode enabled")
-        
-        # Test DB connection
-        await init_db()
-        logger.info("Database tables initialized — PostgreSQL ready")
+        init_db()
+        logger.info("Database tables initialized — SQLite ready")
     except Exception as exc:
-        logger.warning(f"Database not available ({exc}) — running in in-memory mode")
-
-    # Initialize asyncpg pool (for raw queries if needed)
-    try:
-        dsn = getattr(settings, 'database_async_url', settings.database_url)
-        if dsn and "+asyncpg" in dsn:
-            dsn = dsn.replace("+asyncpg", "")
-        _db_pool = await asyncpg.create_pool(
-            dsn=dsn, min_size=2, max_size=10,
-        )
-        logger.info("asyncpg Database pool created")
-    except Exception as exc:
-        logger.error(f"Failed to create asyncpg pool: {exc}")
-        _db_pool = None
+        logger.error(f"Database initialization failed: {exc}")
 
     # Initialize Kafka producer
     if settings.enable_kafka:
@@ -103,16 +83,12 @@ async def lifespan(app: FastAPI):
     _gmail_handler = GmailHandler()
     _whatsapp_handler = WhatsAppHandler()
 
-    app.state.db_pool = _db_pool
     app.state.kafka_producer = _kafka_producer
 
     yield
 
     # Shutdown
-    await close_db()
-    if _db_pool:
-        await _db_pool.close()
-        logger.info("asyncpg Database pool closed")
+    close_db()
     if _kafka_producer:
         await _kafka_producer.close()
         logger.info("Kafka producer closed")
@@ -146,36 +122,33 @@ async def log_requests(request: Request, call_next):
     return response
 
 
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/api/docs")
+
+
 # Health checks
 @app.get("/health", tags=["System"])
 async def health_check():
     checks = {"db": "error", "kafka": "error"}
 
-    # DB check via asyncpg pool
-    if _db_pool:
-        try:
-            async with _db_pool.acquire() as conn:
-                await conn.fetchval("SELECT 1")
-            checks["db"] = "ok"
-        except Exception as exc:
-            logger.error(f"Health check DB failed: {exc}")
-    else:
-        # Check if SQLAlchemy engine works
-        try:
-            from production.database.session import get_engine
-            from sqlalchemy import text
-            engine = get_engine()
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-            checks["db"] = "ok"
-        except Exception:
-            checks["db"] = "error"
+    # DB check
+    try:
+        from production.database.session import get_engine
+        from sqlalchemy import text
+        engine = get_engine()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        checks["db"] = "ok"
+    except Exception as exc:
+        logger.error(f"Health check DB failed: {exc}")
+        checks["db"] = "error"
 
     # Kafka check
     if _kafka_producer and getattr(_kafka_producer, "_initialized", False):
         checks["kafka"] = "ok"
     else:
-        checks["kafka"] = "optional"  # Kafka is optional
+        checks["kafka"] = "optional"
 
     status = "healthy" if checks["db"] == "ok" else "degraded"
     return {
@@ -192,7 +165,8 @@ async def health_check():
 @app.get("/demo/whatsapp", tags=["Demo"])
 async def whatsapp_demo():
     try:
-        with open("whatsapp_demo.html", "r", encoding="utf-8") as f:
+        demo_file = _project_root / "whatsapp_demo.html"
+        with open(demo_file, "r", encoding="utf-8") as f:
             content = f.read()
         return HTMLResponse(content=content)
     except Exception as e:
@@ -203,7 +177,8 @@ async def whatsapp_demo():
 @app.get("/demo/webform", tags=["Demo"])
 async def webform_demo():
     try:
-        with open("web_form_demo.html", "r", encoding="utf-8") as f:
+        demo_file = _project_root / "web_form_demo.html"
+        with open(demo_file, "r", encoding="utf-8") as f:
             content = f.read()
         return HTMLResponse(content=content)
     except Exception as e:
@@ -239,39 +214,38 @@ async def create_web_form_ticket(request: WebFormTicketRequest):
             raise HTTPException(status_code=500, detail="Agent processing failed")
 
         ticket_id = result.get("ticket_id", "TICKET-UNKNOWN")
-        customer_id = result.get("customer_id")
         ai_response = result.get("response", "Thank you for your message. Our team will respond shortly.")
 
-        # Save to real PostgreSQL database
+        # Save to SQLite
         try:
             from production.database.repositories import (
                 CustomerRepository, TicketRepository, ConversationRepository, MessageRepository
             )
             
             factory = get_session_factory()
-            async with factory() as db:
+            with factory() as db:
                 # Resolve or create customer
                 customer_repo = CustomerRepository(db)
-                customer = await customer_repo.resolve_or_create(
+                customer = customer_repo.resolve_or_create(
                     name=request.customer_name,
                     email=request.email,
                 )
 
                 # Create ticket
                 ticket_repo = TicketRepository(db)
-                ticket = await ticket_repo.create(
+                ticket = ticket_repo.create(
                     customer_id=customer.customer_id,
                     channel="web_form",
                     message=request.message,
                     subject=request.subject,
-                    topic=result.get("steps", {}).get("knowledge_base", {}).get("results", [{}])[0].get("topic"),
+                    topic=result.get("steps", {}).get("knowledge_base", {}).get("results", [{}])[0].get("topic") if result.get("steps", {}).get("knowledge_base", {}).get("results") else None,
                     sentiment_score=result.get("steps", {}).get("sentiment", {}).get("score", 0),
                     sentiment_label=result.get("steps", {}).get("sentiment", {}).get("label", "neutral"),
                 )
 
                 # Create conversation turn
                 conv_repo = ConversationRepository(db)
-                conv = await conv_repo.create_turn(
+                conv = conv_repo.create_turn(
                     customer_id=customer.customer_id,
                     ticket_id=ticket.ticket_id,
                     channel="web_form",
@@ -283,7 +257,7 @@ async def create_web_form_ticket(request: WebFormTicketRequest):
 
                 # Record customer message
                 msg_repo = MessageRepository(db)
-                await msg_repo.create(
+                msg_repo.create(
                     conversation_id=str(conv.conversation_id),
                     ticket_id=ticket.ticket_id,
                     role="customer",
@@ -292,7 +266,7 @@ async def create_web_form_ticket(request: WebFormTicketRequest):
                 )
 
                 # Record AI response message
-                await msg_repo.create(
+                msg_repo.create(
                     conversation_id=str(conv.conversation_id),
                     ticket_id=ticket.ticket_id,
                     role="agent",
@@ -302,12 +276,12 @@ async def create_web_form_ticket(request: WebFormTicketRequest):
                 )
 
                 # Update ticket status
-                await ticket_repo.update_status(ticket.ticket_id, "responded")
+                ticket_repo.update_status(ticket.ticket_id, "responded")
                 db_ticket_id = ticket.ticket_id
 
             logger.info(f"Ticket saved to DB: {db_ticket_id}")
         except Exception as db_exc:
-            logger.warning(f"Failed to save ticket to DB (using in-memory ID): {db_exc}")
+            logger.error(f"Failed to save ticket to DB: {db_exc}", exc_info=True)
             db_ticket_id = ticket_id
 
         return JSONResponse(
@@ -337,9 +311,9 @@ async def get_ticket(ticket_id: str):
     from production.database.repositories import TicketRepository
     
     factory = get_session_factory()
-    async with factory() as db:
+    with factory() as db:
         repo = TicketRepository(db)
-        ticket = await repo.find_by_id(ticket_id)
+        ticket = repo.find_by_id(ticket_id)
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
         
@@ -361,9 +335,9 @@ async def get_customer(email: str):
     from production.database.repositories import CustomerRepository
     
     factory = get_session_factory()
-    async with factory() as db:
+    with factory() as db:
         repo = CustomerRepository(db)
-        customer = await repo.find_by_email(email)
+        customer = repo.find_by_email(email)
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
         

@@ -39,6 +39,13 @@ from src.mcp_server import (
     send_response as _mcp_send_response,
 )
 
+# Alias for internal access in agent fallback
+search_kb_raw = _mcp_search_kb
+create_ticket_raw = _mcp_create_ticket
+get_history_raw = _mcp_get_customer_history
+escalate_raw = _mcp_escalate_to_human
+send_response_raw = _mcp_send_response
+
 from production.utils.helpers import (
     format_for_channel,
     sanitize_input,
@@ -265,6 +272,7 @@ def search_knowledge_base(input: SearchKnowledgeBaseInput) -> str:
 @function_tool
 def create_ticket(input: CreateTicketInput) -> str:
     """Create a new support ticket."""
+    logger.info(f"DEBUG: create_ticket type is {type(create_ticket)}")
     try:
         logger.info("Calling MCP: create_ticket for %s", input.customer_name)
         return _mcp_create_ticket(

@@ -38,6 +38,12 @@ from production.agent.tools import (
     get_customer_history,
     escalate_to_human,
     send_response,
+    # Raw functions for fallback
+    search_kb_raw,
+    create_ticket_raw,
+    get_history_raw,
+    escalate_raw,
+    send_response_raw,
     SearchKnowledgeBaseInput,
     CreateTicketInput,
     GetCustomerHistoryInput,
@@ -456,12 +462,53 @@ class AgentPipeline:
             return result
         ticket_id = ticket_result["ticket"]["ticket_id"]
         result["ticket_id"] = ticket_id
+        
+        # 1. Search Knowledge Base
         kb_result = self._search_kb(query=message)
         result["steps"]["knowledge_base"] = kb_result
+        
+        # 2. Analyze Sentiment
         sentiment_result = self._analyze_sentiment(message)
         result["steps"]["sentiment"] = sentiment_result
-        # Simulating basic logic
-        response_text = f"Hi {customer_name}, I've received your ticket {ticket_id}. Our team will help you."
+        
+        # 3. Generate Smart Rule-based Response
+        kb_data = kb_result.get("results", [])
+        if kb_data:
+            # Smart fallback: use KB content
+            kb_main = kb_data[0]
+            answer = kb_main.get("content", "I found some relevant information for you.")
+            details = kb_main.get("details", {})
+            
+            response_text = f"Hi {customer_name}, I've found some information regarding your inquiry about '{kb_main.get('title')}':\n\n"
+            
+            # Extract content if it's a dict
+            if isinstance(answer, dict):
+                overview = answer.get("overview", "")
+                if overview:
+                    response_text += f"{overview}\n\n"
+                steps = answer.get("steps", [])
+                if steps:
+                    response_text += "Steps:\n" + "\n".join(f"- {s}" for s in steps) + "\n"
+            else:
+                response_text += f"{answer}\n\n"
+
+            if details:
+                if isinstance(details, dict):
+                    for k, v in details.items():
+                        response_text += f"- {k.replace('_', ' ').title()}: {v}\n"
+                elif isinstance(details, list):
+                    for item in details:
+                        response_text += f"- {item}\n"
+            
+            response_text += f"\nI've also created a ticket ({ticket_id}) if you need more help!"
+        else:
+            # Generic fallback
+            response_text = f"Hi {customer_name}, I've received your ticket {ticket_id}. I couldn't find a direct answer in my database, but our team will help you soon."
+            
+        # Add a small note about AI mode if key is missing
+        if not self.settings.openai_api_key or "sk-" in self.settings.openai_api_key:
+             response_text += "\n\n(Note: I'm currently running in 'Smart Rule' mode. Add an OpenAI API Key to .env to enable my full AI Brain!)"
+
         send_result = self._send_response(ticket_id, response_text, self.channel, {"escalate": False})
         result["response"] = response_text
         result["status"] = "completed"
@@ -564,14 +611,14 @@ class AgentPipeline:
 
     def _create_ticket(self, customer_name, message, email=None, phone=None, subject=None) -> dict:
         try:
-            raw = create_ticket(CreateTicketInput(
+            raw = create_ticket_raw(
                 customer_name=customer_name,
                 message=message,
                 channel=self.channel,
                 email=email,
                 phone=phone,
                 subject=subject,
-            ))
+            )
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step create_ticket failed: %s", exc)
@@ -579,11 +626,11 @@ class AgentPipeline:
 
     def _get_history(self, email=None, phone=None, customer_id=None) -> dict:
         try:
-            raw = get_customer_history(GetCustomerHistoryInput(
+            raw = get_history_raw(
                 email=email, 
                 phone=phone,
                 customer_id=customer_id
-            ))
+            )
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step get_history failed: %s", exc)
@@ -591,7 +638,7 @@ class AgentPipeline:
 
     def _search_kb(self, query: str, topic: str = None) -> dict:
         try:
-            raw = search_knowledge_base(SearchKnowledgeBaseInput(query=query, topic=topic))
+            raw = search_kb_raw(query=query, topic=topic)
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step search_kb failed: %s", exc)
@@ -721,14 +768,14 @@ class AgentPipeline:
 
     def _send_response(self, ticket_id, response_text, channel, escalation) -> dict:
         try:
-            raw = send_response(SendResponseInput(
+            raw = send_response_raw(
                 ticket_id=ticket_id,
                 response_text=response_text,
                 channel=channel,
                 include_escalation_note=escalation.get("escalate", False),
                 escalation_team=escalation.get("team", "").replace("_", " ").title() if escalation.get("team") else None,
                 escalation_sla=escalation.get("sla") or None,
-            ))
+            )
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step send_response failed: %s", exc)
@@ -736,14 +783,14 @@ class AgentPipeline:
 
     def _escalate(self, ticket_id, team, reason, priority, customer_name) -> dict:
         try:
-            raw = escalate_to_human(EscalateToHumanInput(
+            raw = escalate_raw(
                 ticket_id=ticket_id,
                 team=team,
                 reason=reason,
                 priority=priority,
                 customer_name=customer_name,
                 summary=f"Auto-escalated by agent pipeline: {reason}",
-            ))
+            )
             return json.loads(raw)
         except Exception as exc:
             logger.error("Pipeline step escalate failed: %s", exc)
