@@ -337,8 +337,8 @@ class AgentPipeline:
             "send_response": self._send_response_tool_wrapper(),
         }
 
-        max_turns = 5
-        result_summary = {"steps": {}}
+        max_turns = 10
+        result_summary = {"steps": {}, "status": "processing"}
         
         for i in range(max_turns):
             try:
@@ -391,12 +391,22 @@ class AgentPipeline:
                             result_summary["ticket_id"] = tool_result["ticket"]["ticket_id"]
                             result_summary["customer_id"] = tool_result["ticket"]["customer_id"]
                         
+                        if fn_name == "send_response" and "status" in tool_result:
+                            result_summary["response"] = fn_args.get("response_text", "")
+                
             except Exception as e:
                 logger.error(f"Error in agent loop turn {i}: {e}", exc_info=True)
                 result_summary["status"] = "error"
                 result_summary["error"] = str(e)
                 break
         
+        # If no response was set but agent finished
+        if "response" not in result_summary and result_summary["status"] == "completed":
+            # Fallback to the last assistant message if it wasn't a tool call
+            last_msg = messages[-1]
+            if last_msg.get("role") == "assistant" and last_msg.get("content"):
+                result_summary["response"] = last_msg["content"]
+
         return result_summary
 
     def _create_kb_tool_wrapper(self):
@@ -411,14 +421,12 @@ class AgentPipeline:
 
     def _get_history_tool_wrapper(self):
         def wrapper(email=None, phone=None, customer_id=None):
-            return self._get_history(email, phone) # Fix: add customer_id if needed
+            return self._get_history(email, phone, customer_id)
         return wrapper
 
     def _escalate_tool_wrapper(self):
-        def wrapper(ticket_id, team, reason, priority="P2", summary=None):
-            # We need customer_name from state or args. 
-            # For now, just pass placeholder or fix _escalate signature
-            return self._escalate(ticket_id, team, reason, priority, "Customer")
+        def wrapper(ticket_id, team, reason, priority="P2", summary=None, customer_name=None):
+            return self._escalate(ticket_id, team, reason, priority, customer_name or "Customer")
         return wrapper
 
     def _send_response_tool_wrapper(self):
